@@ -1,0 +1,105 @@
+version: "3.8"
+
+services:
+
+  client:
+    build:
+      context: ./client
+      dockerfile: ../docker/client/Dockerfile
+    container_name: tbg-computers-client
+    volumes:
+      - ./client:/srv/tbg-computers/client
+    command: npm run start
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # Fixes bug where websocket connection is fixed to default port 3000
+      - WDS_SOCKET_PORT=0
+    networks:
+      - tbg-computers
+
+  api:
+    build:
+      context: ./api
+      dockerfile: ../docker/php/Dockerfile
+    container_name: tbg-computers-api
+    volumes:
+      - ./api:/srv/tbg-computers
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom-php.ini
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    networks:
+      - tbg-computers
+
+  nginx:
+    build:
+      context: ./docker/nginx
+    container_name: tbg-computers-nginx
+    restart: unless-stopped
+    volumes:
+      - ./api:/srv/tbg-computers
+      # vhost
+      - ./docker/nginx/templates:/etc/nginx/templates
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      NGINX_PORT: 443
+      NGINX_ROOT: /srv/tbg-computers
+      NGINX_HOST: localhost
+    networks:
+      - tbg-computers
+
+  mysql:
+    image: mysql:8.1.0
+    container_name: tbg-computers-mysql
+    restart: unless-stopped
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - "13306:3306"
+    environment:
+      MYSQL_DATABASE: tbg-computers
+      MYSQL_ROOT_PASSWORD: root #login:root password:root
+      MYSQL_USER: tbg-computers-user
+      MYSQL_PASSWORD: UdUYFv8AERNwr4tK
+    hostname: mysql.docker
+    networks:
+      - tbg-computers
+
+  phpmyadmin:
+    image: phpmyadmin:5.2.1
+    container_name: tbg-computers-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: phpmyadmin-tbg-computers-user
+      MYSQL_PASSWORD: YkC7BvtJA4Ru2NMg
+      UPLOAD_LIMIT: 200M
+    networks:
+      - tbg-computers
+
+volumes:
+  nginx:
+  mysql:
+    driver: "local"
+
+networks:
+  tbg-computers:
+    driver: "bridge"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.22.0.0/16
